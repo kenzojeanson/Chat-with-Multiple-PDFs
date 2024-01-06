@@ -2,6 +2,7 @@
 Chat with Multiple PDFs\env.py
 env.py
 .env
+__pycache__
 
 # Logs
 logs

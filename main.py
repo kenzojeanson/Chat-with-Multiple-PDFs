@@ -1,9 +1,13 @@
 from datetime import datetime
+from email import message
+from pkgutil import resolve_name
+from random import choices
 import openai
+from openai import OpenAI
 from torch import cosine_similarity
 import env
 API_KEY = env.API_KEY
-openai.api_key = API_KEY
+client = OpenAI(api_key = API_KEY) #API Key
 
 # ---------- Get PDF Text ---------- #
 import PyPDF2
@@ -22,7 +26,7 @@ from langchain.text_splitter import CharacterTextSplitter
 def get_text_chunks(raw_text):
     text_splitter = CharacterTextSplitter(
     separator = '\n',
-    chunk_size = 3000,
+    chunk_size = 5000,
     chunk_overlap = 500,
     length_function = len
     )
@@ -101,35 +105,72 @@ def get_most_similar_chunk(prompt_embeddings, text_chunk_embeddings):
 
 # ---------- Get Answer ---------- #
 def get_answer(question, text_chunk):
-    template = f'''
+    template = f'''   
+    [Document]: \n
+    {text_chunk} \n
+    
+    [Question]: \n
+    {question} \n \n    
+    
+    [Instructions]: \n
+    Step 1: Pick one of the following Templates depending on the [Question], Do not add this as part of your response. But follow the template: \n
+        1. If the question is relevant to the text documents, use [Template #1] \n
+        2. If the question is not relevant to the text documents, use [Template #2] \n
+        3. If the question is not in the form of a question, or you do not know how to reply, use [Template #3] \n \n
+                       
+    [Template #1]: \n
+        First; Repeat back the user question \n
+        Next; Answer the question confidently, accurately, and with detail \n
+        
+        Example: \n    
+        User Question: "What is the mass of the sun?" \n
+        Structure your output like this: \n
+        
+        Question: What is the mass of the sun? \n  
+        Answer: The mass of the sun is 3.955 × 10^30 kg. \n \n
+
+    [Template #2]: \n
+        First; Repeat back the user question \n
+        Next; Answer with: "Please ensure that your message is a question relevant to the information provided in the document." \n
+        
+        Example: \n    
+        User Question: "Irrelevant question" \n
+        Structure your output like this: \n
+        
+        Question: "Irrelevant Question" \n  
+        Answer: "Please ensure that your message is a question relevant to the information provided in the document." \n \n
+
+    [Template #3]: \n
+        First; Repeat back the user question \n
+        Next; Answer with: "Please ensure your message in the form of a question relevant to the information provided in the document." \n
+        
+        Example: \n    
+        User Question: "Not a question" \n
+        Structure your output like this: \n
+        
+        Question: "Not a Question" \n  
+        Answer: "Please ensure your message in the form of a question relevant to the information provided in the document." \n \n
+        
+        
+    Step 2: In your response, ensure the following: \n
+        1. The name of the template is not in the response. \n
+        2. Only use what is specifically provided in the templates. Only use one template at a time. \n \n
+        
        
-    [Text Document]: {text_chunk} \n
-    [Question]: {question} \n
-    
-    [Template] \n
-    Question:\n    
-    Answer: \n
-    \n
-    [Instructions] \n
-    1. You are a professional in the related field. \n
-    2. You have been given a text document. \n
-    3. To the best of your ability, you will answer the question only using the information provided in the text document. \n
-    4. Be sure to structure your answer. Sound as professional as possible. \n
-    5. In your response, please follow the template mentioned above. So, be sure to repeat the question. \n
-    
-    Let's think step by step.
+    Let's think step by step    
     '''
     
-    response = openai.Completion.create(
-    model="text-davinci-003",
-    prompt = template,
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": template},        
+    ],
     temperature = 0,
     max_tokens = 1000,
-)  
+    )     
    
-    answer = ""
-    for result in response.choices: #type: ignore
-        answer = result.text
+    answer = response.choices[0].message.content
        
     return answer
 
@@ -165,16 +206,20 @@ with st.sidebar:
                            
             st.write("Upload Complete")  
   
-if prompt := st.chat_input("Ask a question on the documents"):
-      
-    prompt_embeddings = get_prompt_embeddings(prompt) # Returns a NP array of the prompt embedding (only one)
-    
-    most_similar_chunk_index = get_most_similar_chunk(prompt_embeddings, st.session_state.text_chunks_embeddings) # Returns index of the most similar chunk
-    
-    most_similar_chunk_text = st.session_state.text_chunks[most_similar_chunk_index]   
+with st.spinner():
+    if prompt := st.chat_input("Ask a question on the documents"):
         
-    answer = get_answer(prompt, most_similar_chunk_text) 
-    st.write(answer)
+        print(prompt)
+        
+        prompt_embeddings = get_prompt_embeddings(prompt) # Returns a NP array of the prompt embedding (only one)
+        
+        most_similar_chunk_index = get_most_similar_chunk(prompt_embeddings, st.session_state.text_chunks_embeddings) # Returns index of the most similar chunk
+        
+        most_similar_chunk_text = st.session_state.text_chunks[most_similar_chunk_index]   
+            
+        answer = get_answer(prompt, most_similar_chunk_text) 
+        st.write(most_similar_chunk_text)
+        st.write(answer)
     
         
 if 'text_chunks' not in st.session_state:
