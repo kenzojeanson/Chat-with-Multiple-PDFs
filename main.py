@@ -1,7 +1,5 @@
 from datetime import datetime
 from email import message
-from pkgutil import resolve_name
-from random import choices
 import openai
 from openai import OpenAI
 from torch import cosine_similarity
