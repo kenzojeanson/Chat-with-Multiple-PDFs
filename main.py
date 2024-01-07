@@ -168,6 +168,7 @@ def get_answer(question, text_chunk):
    
     answer = response.choices[0].message.content
     
+    assert response.usage is not None
     prompt_cost = response.usage.prompt_tokens * 0.01 / 1000
     completion_cost = response.usage.completion_tokens * 0.03 / 1000
     total_cost = round(prompt_cost + completion_cost, 3)
