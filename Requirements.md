@@ -7,5 +7,4 @@ sentence-transformers==2.2.2
 streamlit==1.29.0
 torch==2.0.1
 
-
 You can remove the env import and manually add in your OpenAI API Key. Or you can add it in the env file.

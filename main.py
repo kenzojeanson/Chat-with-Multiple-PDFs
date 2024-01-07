@@ -1,12 +1,3 @@
-from datetime import datetime
-from email import message
-import openai
-from openai import OpenAI
-from torch import cosine_similarity
-import env
-API_KEY = env.API_KEY
-client = OpenAI(api_key = API_KEY) #API Key
-
 # ---------- Get PDF Text ---------- #
 import PyPDF2
 from PyPDF2 import PdfReader
@@ -35,7 +26,7 @@ def get_text_chunks(raw_text):
 # ---------- Text Chunks Embeddings ---------- #
 import numpy as np
 from sentence_transformers import SentenceTransformer
-from langchain.vectorstores import FAISS
+from datetime import datetime
 def get_text_chunk_embeddings(text_chunks):  
     print('\n','\n','----------', datetime.now().strftime("%d/%m/%Y %H:%M:%S"), '----------', '\n','\n' )  
     print('- Text Chunk Embeddings -')
@@ -70,7 +61,6 @@ def get_prompt_embeddings(prompt):
     return embedding_np
 
 # ---------- Get Most Similar Chunk ---------- #
-from numpy.linalg import norm
 from sklearn.metrics.pairwise import cosine_similarity
 def get_most_similar_chunk(prompt_embeddings, text_chunk_embeddings):
     
@@ -102,22 +92,29 @@ def get_most_similar_chunk(prompt_embeddings, text_chunk_embeddings):
     return most_similar_chunk_index
 
 # ---------- Get Answer ---------- #
+from openai import OpenAI
+import env
+API_KEY = env.API_KEY
+client = OpenAI(api_key = API_KEY) #API Key
 def get_answer(question, text_chunk):
-    template = f'''   
-    [Document]: \n
-    {text_chunk} \n
     
-    [Question]: \n
-    {question} \n \n    
+    template = f'''   
+    [Start of Document]: \n
+    "{text_chunk}" \n
+    [End of Document] \n
+    
+    [Start of Question]: \n
+    {question} \n
+    [End of Question]: \n \n    
     
     [Instructions]: \n
-    Step 1: Pick one of the following Templates depending on the [Question], Do not add this as part of your response. But follow the template: \n
+    Step 1: The question was given above between [Start of Question] and [End of Question]. Pick one of the following Templates depending on the [Question], Do not add this as part of your response. But follow the template: \n
         1. If the question is relevant to the text documents, use [Template #1] \n
         2. If the question is not relevant to the text documents, use [Template #2] \n
         3. If the question is not in the form of a question, or you do not know how to reply, use [Template #3] \n \n
                        
     [Template #1]: \n
-        First; Repeat back the user question \n
+        First; Repeat back the user question. Do not include quotation marks such as "" or '' \n
         Next; Answer the question confidently, accurately, and with detail \n
         
         Example: \n    
@@ -155,11 +152,12 @@ def get_answer(question, text_chunk):
         2. Only use what is specifically provided in the templates. Only use one template at a time. \n \n
         
        
-    Let's think step by step    
+    [Special Instruction] \n
+    Let's structure our response. Let's think step by step.    
     '''
     
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-4-1106-preview",
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": template},        
@@ -169,6 +167,12 @@ def get_answer(question, text_chunk):
     )     
    
     answer = response.choices[0].message.content
+    
+    prompt_cost = response.usage.prompt_tokens * 0.01 / 1000
+    completion_cost = response.usage.completion_tokens * 0.03 / 1000
+    total_cost = round(prompt_cost + completion_cost, 3)
+        
+    print("Total Cost: $", total_cost)
        
     return answer
 
@@ -216,10 +220,11 @@ with st.spinner():
         most_similar_chunk_text = st.session_state.text_chunks[most_similar_chunk_index]   
             
         answer = get_answer(prompt, most_similar_chunk_text) 
-        st.write(most_similar_chunk_text)
+        #st.write(most_similar_chunk_text)
         st.write(answer)
-    
+            
         
+# Session Storage        
 if 'text_chunks' not in st.session_state:
     st.session_state.text_chunks = "NULL"
                 
